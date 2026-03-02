@@ -7,6 +7,7 @@ import { HistoryPanel } from "@/components/HistoryPanel";
 import { streamExplanation } from "@/lib/stream-chat";
 import { getHistory, addToHistory, clearHistory, HistoryEntry } from "@/lib/history";
 import { toast } from "sonner";
+import { InstallBanner } from "@/components/InstallBanner";
 
 const Index = () => {
   const [input, setInput] = useState("");
@@ -71,6 +72,7 @@ const Index = () => {
 
   return (
     <div className="min-h-screen flex flex-col items-center px-4 py-8 md:py-16">
+      <InstallBanner />
       <motion.div
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
