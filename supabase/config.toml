@@ -2,3 +2,9 @@ project_id = "dlvpplsbvixhtomsanpv"
 
 [functions.explain-jargon]
 verify_jwt = false
+
+[functions.dev-companion-chat]
+verify_jwt = false
+
+[functions.dev-companion-repo]
+verify_jwt = false
