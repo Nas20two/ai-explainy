@@ -1,35 +1,38 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-serve(async (req) => {
+Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
     const { jargon } = await req.json();
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+    const openrouterKey = Deno.env.get("OPENROUTER_API_KEY");
+    if (!openrouterKey) {
+      return new Response(
+        JSON.stringify({ error: "AI not configured" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
-    const response = await fetch(
-      "https://ai.gateway.lovable.dev/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-3-flash-preview",
-          messages: [
-            {
-              role: "system",
-              content: `You are the AI Jargon Buster! Your job is to explain confusing AI and tech jargon in a way that a 5-year-old would understand.
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${openrouterKey}`,
+        "HTTP-Referer": "https://ai-explainy.vercel.app",
+        "X-Title": "AI Explainy - Jargon Buster",
+      },
+      body: JSON.stringify({
+        model: "deepseek/deepseek-v4-flash",
+        messages: [
+          {
+            role: "system",
+            content: `You are the AI Jargon Buster! Your job is to explain confusing AI and tech jargon in a way that a 5-year-old would understand.
 
 Rules:
 - Use simple, everyday words and fun analogies
@@ -41,16 +44,16 @@ Rules:
 - If there are multiple jargon terms, explain each one
 - Maximum 200 words
 - Format with markdown for readability`,
-            },
-            {
-              role: "user",
-              content: `Please explain this AI jargon in simple terms:\n\n"${jargon}"`,
-            },
-          ],
-          stream: true,
-        }),
-      }
-    );
+          },
+          {
+            role: "user",
+            content: `Please explain this AI jargon in simple terms:\n\n"${jargon}"`,
+          },
+        ],
+        stream: true,
+        max_tokens: 1024,
+      }),
+    });
 
     if (!response.ok) {
       if (response.status === 429) {
@@ -59,14 +62,8 @@ Rules:
           { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "AI credits have run out. Please add more credits. 💳" }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
       const t = await response.text();
-      console.error("AI gateway error:", response.status, t);
+      console.error("OpenRouter error:", response.status, t);
       return new Response(
         JSON.stringify({ error: "Oops! The AI brain had a hiccup. Try again! 🧠💫" }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
