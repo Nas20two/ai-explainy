@@ -118,49 +118,53 @@ export function ChatContainer() {
         throw new Error(errText || "Chat failed");
       }
 
-      // Insert an empty assistant message placeholder
-      const { data: assistantMsg, error: insertError } = await supabase
-        .from("messages")
-        .insert({ thread_id: activeThreadId, role: "assistant", content: "" })
-        .select()
-        .single();
-
-      if (insertError || !assistantMsg) {
-        throw new Error("Failed to create message placeholder");
-      }
-
-      // Stream the response
+      // Stream the response — local-only during streaming, save once at end
       const reader = res.body?.getReader();
       if (!reader) throw new Error("No stream available");
       let fullContent = "";
       const decoder = new TextDecoder();
+      const localId = crypto.randomUUID();
+
+      // Insert optimistic local message
+      setMessages((prev) => [
+        ...prev,
+        { id: localId, role: "assistant" as const, content: "", created_at: new Date().toISOString() },
+      ]);
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-        fullContent += decoder.decode(value, { stream: true });
 
-        // Optimistic local update
+        // Decode all the raw bytes at once (no SSE parsing needed — we send plain text)
+        const chunk = decoder.decode(value, { stream: true });
+        fullContent += chunk;
+
+        // Local-only update — fast
         setMessages((prev) =>
-          prev.map((m) =>
-            m.id === assistantMsg.id
-              ? { ...m, content: fullContent + "..." }
-              : m
-          )
+          prev.map((m) => (m.id === localId ? { ...m, content: fullContent } : m))
         );
       }
 
-      // Final update without the "..."
-      await supabase
-        .from("messages")
-        .update({ content: fullContent })
-        .eq("id", assistantMsg.id);
+      // Save to Supabase once at the end
+      await supabase.from("messages").insert({
+        thread_id: activeThreadId,
+        role: "assistant",
+        content: fullContent,
+      });
 
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.id === assistantMsg.id ? { ...m, content: fullContent } : m
-        )
-      );
+      // Replace local message with DB-backed one
+      const { data: saved } = await supabase
+        .from("messages")
+        .select("*")
+        .eq("thread_id", activeThreadId)
+        .order("created_at", { ascending: false })
+        .limit(1);
+
+      if (saved?.[0]) {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === localId ? (saved[0] as ChatMessage) : m))
+        );
+      }
     } catch (err) {
       toast.error("Failed to get AI response — check console for details");
       console.error("Chat error:", err);

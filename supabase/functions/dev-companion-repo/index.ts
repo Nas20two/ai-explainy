@@ -1,6 +1,17 @@
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, apikey",
+};
+
 Deno.serve(async (req: Request) => {
+  // Handle CORS preflight
+  if (req.method === "OPTIONS") {
+    return new Response(null, { headers: corsHeaders });
+  }
+
   if (req.method !== "POST") {
-    return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405 });
+    return new Response(JSON.stringify({ error: "Method not allowed" }), { status: 405, headers: corsHeaders });
   }
 
   const { repoUrl } = await req.json();
@@ -70,7 +81,7 @@ Deno.serve(async (req: Request) => {
             "X-Title": "Dev Companion Repo Analyzer",
           },
           body: JSON.stringify({
-            model: "openrouter/auto",
+            model: "deepseek/deepseek-v4-flash", // Cheap coding model
             messages: [
               {
                 role: "system",
@@ -147,11 +158,11 @@ Return JSON: {"summary":"...","keyFiles":["path1","path2"]}`,
       language: meta.language || "",
       summary, keyFiles, fileTree: root,
     }), {
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...corsHeaders },
     });
   } catch (err) {
     return new Response(JSON.stringify({
       error: err instanceof Error ? err.message : "Failed to analyze repo",
-    }), { status: 500 });
+    }), { status: 500, headers: corsHeaders });
   }
 });
